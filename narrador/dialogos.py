@@ -39,9 +39,12 @@ def partir(par):
     for t, x, n in out:
         if not x:
             continue
-        if limpio and re.fullmatch(r"[\s,.;:—]+", x):   # puntuación suelta: al trozo anterior
-            limpio[-1] = (limpio[-1][0], limpio[-1][1] + x.strip(), limpio[-1][2])
-        else:
+        # puntuación al principio ("ella—. Mi papá…"): se pega al trozo anterior
+        signos = (re.fullmatch(r"[\s,.;:—]+", x) or re.match(r"\s*[,.;:]+\s*", x)) if limpio else None
+        if signos:
+            limpio[-1] = (limpio[-1][0], limpio[-1][1] + signos.group().strip(), limpio[-1][2])
+            x = x[signos.end():]
+        if x:
             limpio.append((t, x, n))
     return limpio
 

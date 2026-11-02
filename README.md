@@ -13,6 +13,14 @@ y un **lector web** que resalta cada palabra mientras se escucha.
 - 🖼️ **Con los dibujos del libro**, cada uno en su lugar.
 - 🔖 Selector de capítulos, velocidad de lectura, y recuerda dónde te quedaste.
 
+<p align="center">
+  <img src="docs/lector.png" alt="Lector: la palabra que se dice se ilumina y la réplica se subraya con el color de Lucía" width="68%">
+  <img src="docs/telefono.png" alt="En el teléfono: ficha con el significado de «farero» en el libro y en el diccionario" width="26%">
+</p>
+
+*Capturas del cuento de ejemplo [`ejemplo/el_faro.txt`](ejemplo/el_faro.txt). Pruébalo con
+`python narrador.py crear ejemplo/el_faro.txt --titulo "El faro"`.*
+
 Las voces son las voces neuronales de Microsoft Edge (gratis, con conexión a internet), usando
 [edge-tts](https://github.com/rany2/edge-tts).
 
