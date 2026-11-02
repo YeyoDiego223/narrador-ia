@@ -1,0 +1,2 @@
+edge-tts>=7.2
+PyMuPDF>=1.24

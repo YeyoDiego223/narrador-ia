@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lector de audiolibro</title>
+<style>
+  :root { --fondo:#f7f3ea; --papel:#fffdf7; --tinta:#2b2620; --suave:#8a8072; --resalte:#ffe08a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fondo); color:var(--tinta);
+         font-family: Georgia, "Times New Roman", serif; }
+  header { position:sticky; top:0; z-index:5; background:var(--papel);
+           border-bottom:1px solid #e4dccb; padding:12px 16px; }
+  .fila { max-width:760px; margin:0 auto; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  h1 { font-size:20px; margin:0; flex:1; }
+  h1 small { color:var(--suave); font-weight:normal; font-size:14px; }
+  button, select { font:inherit; font-size:15px; padding:6px 14px; border-radius:8px;
+                   border:1px solid #d6ccb8; background:#fff; cursor:pointer; }
+  #play { background:var(--tinta); color:#fff; border-color:var(--tinta); min-width:110px; }
+  #barra { flex-basis:100%; display:flex; align-items:center; gap:10px; font-size:13px; color:var(--suave); }
+  #barra input { flex:1; }
+  #leyenda { flex-basis:100%; display:flex; gap:14px; flex-wrap:wrap; font-size:13px; }
+  #leyenda span::before { content:""; display:inline-block; width:10px; height:10px;
+                          border-radius:50%; margin-right:5px; background:var(--c); }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 50vh; }
+  .libro { background:var(--papel); padding:32px clamp(16px,5vw,56px); border-radius:6px;
+           box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  h2 { text-align:center; font-size:22px; margin:40px 0 20px; }
+  h2:first-child { margin-top:0; }
+  p { font-size:19px; line-height:1.75; margin:0 0 14px; text-align:justify; }
+  .seg { border-bottom:2px solid transparent; }
+  .seg.hablante { border-bottom-color:var(--c); }
+  .w { cursor:pointer; border-radius:3px; transition:background .08s; }
+  .w:hover { background:#f0e9da; }
+  .w.leida { color:var(--tinta); }
+  .w.actual { background:var(--resalte); box-shadow:0 0 0 2px var(--resalte); }
+  .pendiente .w:not(.leida) { color:#6d655a; }
+  #quien { font-size:13px; color:var(--suave); min-width:150px; }
+  figure { margin:22px 0; text-align:center; }
+  figure img { max-width:min(320px, 100%); max-height:360px; height:auto; }
+  figure.portada img { max-width:min(280px, 80%); max-height:none; }
+  .w.glosa { text-decoration:underline dotted #b9a98a; text-underline-offset:5px; }
+  #ayuda { font-size:12px; color:var(--suave); margin:6px 0; }
+  #personajes { flex-basis:100%; font-size:13px; }
+  #personajes summary { cursor:pointer; color:var(--suave); }
+  #leyenda { max-height:30vh; overflow:auto; }
+  .tactil { display:none; }
+  @media (hover:none) {
+    .pc { display:none; } .tactil { display:inline; }
+    .w { -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+  }
+  @media (max-width:600px) {
+    header { padding:8px 12px; }
+    .fila { gap:8px; }
+    h1 { font-size:16px; flex-basis:100%; }
+    h1 small { display:none; }
+    button, select { font-size:14px; padding:5px 10px; }
+    #quien { min-width:0; }
+    main { padding:12px 8px 50vh; }
+    .libro { padding:20px 14px; }
+    p { font-size:18px; }
+  }
+  #ficha { position:fixed; z-index:10; width:min(380px, calc(100vw - 32px)); max-height:60vh; overflow:auto;
+           background:#fff; border:1px solid #e0d6c2; border-radius:12px; padding:16px 18px;
+           box-shadow:0 10px 30px rgba(0,0,0,.18); font-size:15px; line-height:1.5; }
+  #ficha[hidden] { display:none; }
+  #ficha h3 { margin:0 0 10px; font-size:22px; padding-right:28px; }
+  #ficha .cerrar { position:absolute; top:10px; right:10px; border:0; background:none; font-size:20px; padding:2px 8px; }
+  #ficha .bloque { margin-bottom:12px; }
+  #ficha .rotulo { font:600 11px/1 system-ui, sans-serif; letter-spacing:.06em; text-transform:uppercase;
+                   color:var(--suave); margin-bottom:6px; }
+  #ficha .libro-def { background:#fff6d6; border-left:3px solid #e2b93b; padding:8px 10px; border-radius:4px; }
+  #ficha ol { margin:0; padding-left:20px; }
+  #ficha li { margin-bottom:6px; }
+  #ficha .tipo { font-style:italic; color:var(--suave); font-size:13px; }
+  #ficha .lema { color:var(--suave); font-size:13px; margin:-6px 0 8px; }
+  #ficha a { color:#3b6ea5; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="fila">
+    <h1 id="titulo"></h1>
+    <select id="cap" title="Capítulo"></select>
+    <button id="play">▶ Escuchar</button>
+    <select id="vel" title="Velocidad">
+      <option value="0.8">0.8×</option><option value="1" selected>1×</option>
+      <option value="1.2">1.2×</option><option value="1.5">1.5×</option>
+    </select>
+    <div id="barra"><span id="tiempo">0:00</span><input id="pos" type="range" min="0" step="0.1" value="0"><span id="total"></span></div>
+    <details id="personajes">
+      <summary>Personajes y ayuda</summary>
+      <div id="ayuda"><span class="pc">Clic en una palabra: escuchar desde ahí · Doble clic o clic derecho: ver qué significa</span><span class="tactil">Toca una palabra: escuchar desde ahí · Mantenla presionada: ver qué significa</span></div>
+      <div id="leyenda"></div>
+    </details>
+  </div>
+</header>
+<main><div class="libro pendiente" id="libro"></div></main>
+<div id="ficha" hidden></div>
+<audio id="audio" src="audio.mp3" preload="auto"></audio>
+<script src="datos.js"></script>
+<script>
+const audio = document.getElementById('audio');
+const libro = document.getElementById('libro');
+const palabras = [];   // {i, f, el, seg}
+const segmentos = [];  // {inicio, el}
+const GLOSARIO = LIBRO.glosario || {};
+
+const tituloEl = document.getElementById('titulo');
+tituloEl.textContent = LIBRO.titulo + ' ';
+tituloEl.appendChild(document.createElement('small')).textContent = LIBRO.autor || '';
+document.title = LIBRO.titulo;
+
+const leyenda = document.getElementById('leyenda');
+for (const [k, v] of Object.entries(LIBRO.voces)) {
+  const s = document.createElement('span');
+  s.style.setProperty('--c', v.color);
+  s.textContent = v.nombre;
+  leyenda.appendChild(s);
+}
+
+function dibujo(src, alt, clase) {
+  const f = document.createElement('figure');
+  f.className = clase;
+  const img = f.appendChild(document.createElement('img'));
+  img.src = src; img.alt = alt || ''; img.loading = 'lazy';
+  libro.appendChild(f);
+}
+if (LIBRO.portada) dibujo(LIBRO.portada, LIBRO.titulo, 'portada');
+
+// Significado "en este libro": primero el de ese capítulo, si no el general
+const glosa = (pal, cap) => GLOSARIO[pal.toLowerCase() + '@' + cap] || GLOSARIO[pal.toLowerCase()];
+
+const capitulos = [];  // {titulo, h, inicio}
+const selCap = document.getElementById('cap');
+for (const cap of LIBRO.capitulos) {
+  const h = document.createElement('h2');
+  h.textContent = cap.titulo;
+  libro.appendChild(h);
+  const primero = cap.parrafos.find(p => Array.isArray(p));
+  capitulos.push({ titulo: cap.titulo, h, inicio: primero ? primero[0].inicio : 0 });
+  const corto = /^([IVXLC]+|\d+)$/.test(cap.titulo) ? 'Capítulo ' + cap.titulo : cap.titulo;
+  selCap.add(new Option(corto.length > 40 ? corto.slice(0, 40) + '…' : corto, capitulos.length - 1));
+  for (const parrafo of cap.parrafos) {
+    if (parrafo.img) { dibujo(parrafo.img, parrafo.alt, ''); continue; }
+    const p = document.createElement('p');
+    parrafo.forEach((seg, n) => {
+      const sp = document.createElement('span');
+      sp.className = 'seg';
+      sp.style.setProperty('--c', LIBRO.voces[seg.p].color);
+      sp.dataset.p = seg.p;
+      for (const tr of seg.trozos) {
+        if (tr.i === undefined) { sp.appendChild(document.createTextNode(tr.x)); continue; }
+        const w = document.createElement('span');
+        w.className = 'w';
+        w.textContent = tr.x;
+        w.dataset.n = palabras.length;
+        w.dataset.c = cap.titulo;
+        if (glosa(tr.x, cap.titulo)) w.classList.add('glosa');
+        palabras.push({ i: tr.i, f: tr.f, el: w, seg: sp, cap: capitulos.length - 1 });
+        sp.appendChild(w);
+      }
+      if (n) p.appendChild(document.createTextNode(' '));
+      p.appendChild(sp);
+      segmentos.push({ inicio: seg.inicio, el: sp });
+    });
+    libro.appendChild(p);
+  }
+}
+
+// Última palabra que ya empezó en el instante t
+function buscar(t) {
+  let lo = 0, hi = palabras.length - 1, r = -1;
+  while (lo <= hi) {
+    const m = (lo + hi) >> 1;
+    if (palabras[m].i <= t) { r = m; lo = m + 1; } else hi = m - 1;
+  }
+  return r;
+}
+
+let actual = -1;
+function pintar() {
+  const n = buscar(audio.currentTime);
+  if (n !== actual) {
+    const desde = Math.min(actual, n), hasta = Math.max(actual, n);
+    for (let k = Math.max(desde, 0); k <= hasta; k++)
+      palabras[k].el.classList.toggle('leida', k <= n);
+    if (actual >= 0) {
+      palabras[actual].el.classList.remove('actual');
+      palabras[actual].seg.classList.remove('hablante');
+    }
+    if (n >= 0) {
+      const w = palabras[n];
+      w.el.classList.add('actual');
+      w.seg.classList.add('hablante');
+      document.getElementById('quien').textContent = LIBRO.voces[w.seg.dataset.p].nombre;
+      if (selCap.value != w.cap) selCap.value = w.cap;
+      const r = w.el.getBoundingClientRect();
+      if (!audio.paused && (r.top < 140 || r.bottom > innerHeight - 80))
+        w.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    actual = n;
+  }
+  pos.value = audio.currentTime;
+  document.getElementById('tiempo').textContent = fmt(audio.currentTime);
+  if (!audio.paused) requestAnimationFrame(pintar);
+}
+
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const play = document.getElementById('play');
+const pos = document.getElementById('pos');
+pos.max = LIBRO.duracion;
+document.getElementById('total').textContent = fmt(LIBRO.duracion);
+const quien = document.createElement('span');
+quien.id = 'quien';
+document.getElementById('barra').prepend(quien);
+
+play.onclick = () => audio.paused ? audio.play() : audio.pause();
+audio.onplay = () => { play.textContent = '❚❚ Pausa'; requestAnimationFrame(pintar); };
+audio.onpause = () => { play.textContent = '▶ Escuchar'; };
+audio.onseeked = pintar;
+pos.oninput = () => { audio.currentTime = +pos.value; };
+document.getElementById('vel').onchange = e => { audio.playbackRate = +e.target.value; };
+
+// Clic en una palabra: el audio salta ahí (se espera un poco por si es doble clic)
+let esperaClic;
+libro.addEventListener('click', e => {
+  const n = e.target.dataset.n;
+  if (n === undefined) return;
+  clearTimeout(esperaClic);
+  esperaClic = setTimeout(() => {
+    audio.currentTime = palabras[n].i;
+    if (audio.paused) audio.play();
+  }, 250);
+});
+libro.addEventListener('mousedown', e => { if (e.detail > 1) e.preventDefault(); }); // sin selección azul
+libro.addEventListener('dblclick', e => {
+  if (e.target.dataset.n === undefined) return;
+  clearTimeout(esperaClic);
+  abrirFicha(e.target);
+});
+libro.addEventListener('contextmenu', e => {
+  if (e.target.dataset.n === undefined) return;
+  e.preventDefault();
+  abrirFicha(e.target);
+});
+
+// ---- Ficha de significado: glosario del libro + Wikcionario ----
+const ficha = document.getElementById('ficha');
+const cacheDic = new Map();
+let seguiaSonando = false;
+
+async function wikcionario(pal) {
+  const u = 'https://es.wiktionary.org/w/api.php?action=parse&prop=text&format=json'
+          + '&formatversion=2&redirects=1&origin=*&page=' + encodeURIComponent(pal);
+  const r = await fetch(u).then(r => r.json());
+  if (r.error) return null;
+  const doc = new DOMParser().parseFromString(r.parse.text, 'text/html');
+  const h = doc.getElementById('Español');
+  if (!h) return null;
+  const defs = [];
+  let tipo = '', lema = null;
+  for (let el = (h.closest('.mw-heading') || h).nextElementSibling;
+       el && !el.classList.contains('mw-heading2'); el = el.nextElementSibling) {
+    if (el.matches('.mw-heading3, .mw-heading4')) tipo = el.querySelector('h3, h4').textContent;
+    if (el.tagName !== 'DL' || !el.querySelector(':scope > dt')) continue;
+    el.querySelectorAll('sup, style').forEach(x => x.remove());
+    const dd = el.querySelector(':scope > dd');
+    if (!dd) continue;
+    if (dd.querySelector('.definicion-impropia')) lema = [...dd.querySelectorAll('a')].pop()?.textContent;
+    const marca = el.querySelector('dt').textContent.replace(/^\d+\s*/, '').trim();
+    defs.push({ tipo, txt: (marca ? marca + ' ' : '') + dd.textContent.trim() });
+  }
+  return { defs, lema };
+}
+
+// Busca la palabra; si es una forma conjugada o plural, trae también el significado de la palabra base
+async function buscarDiccionario(pal) {
+  if (cacheDic.has(pal)) return cacheDic.get(pal);
+  let r = await wikcionario(pal.toLowerCase());
+  if (!r && pal !== pal.toLowerCase()) r = await wikcionario(pal);
+  if (r && r.lema && r.lema !== pal) {
+    const base = await wikcionario(r.lema);
+    if (base && base.defs.length) r = { forma: r.defs[0].txt, lema: r.lema, defs: base.defs };
+  }
+  cacheDic.set(pal, r);
+  return r;
+}
+
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+async function abrirFicha(el) {
+  seguiaSonando = seguiaSonando || !audio.paused;
+  audio.pause();
+  const pal = el.textContent;
+  const g = glosa(pal, el.dataset.c);
+  ficha.innerHTML = `<button class="cerrar" title="Cerrar">×</button><h3>${esc(pal)}</h3>`
+    + (g ? `<div class="bloque"><div class="rotulo">En este libro</div>
+            <div class="libro-def">${g.palabra.toLowerCase() !== pal.toLowerCase() ? `<b>${esc(g.palabra)}:</b> ` : ''}${esc(g.def)}</div></div>` : '')
+    + `<div class="bloque" id="dic"><div class="rotulo">Diccionario</div>Buscando…</div>`;
+  ficha.hidden = false;
+  colocar(el);
+  ficha.querySelector('.cerrar').onclick = cerrarFicha;
+
+  let html;
+  try {
+    const r = await buscarDiccionario(pal);
+    if (!r || !r.defs.length) html = 'No la encontré en el diccionario.';
+    else {
+      let tipoPrevio = '';
+      html = (r.forma ? `<div class="lema">${esc(r.forma)}</div>` : '') + '<ol>'
+        + r.defs.slice(0, 5).map(d => {
+            const t = d.tipo !== tipoPrevio ? `<div class="tipo">${esc(d.tipo)}</div>` : '';
+            tipoPrevio = d.tipo;
+            return `<li>${t}${esc(d.txt)}</li>`;
+          }).join('') + '</ol>';
+    }
+    const base = r?.lema || pal.toLowerCase();
+    html += `<div><a href="https://dle.rae.es/${encodeURIComponent(base)}" target="_blank">Ver «${esc(base)}» en la RAE ↗</a></div>`;
+  } catch {
+    html = 'Sin conexión: no pude consultar el diccionario.';
+  }
+  const dic = ficha.querySelector('#dic');
+  if (dic) dic.innerHTML = '<div class="rotulo">Diccionario</div>' + html;
+  colocar(el);
+}
+
+// Pone la ficha debajo de la palabra (o arriba si no cabe)
+function colocar(el) {
+  const r = el.getBoundingClientRect(), f = ficha.getBoundingClientRect();
+  const x = Math.min(Math.max(16, r.left), innerWidth - f.width - 16);
+  const y = r.bottom + 8 + f.height < innerHeight ? r.bottom + 8 : Math.max(16, r.top - f.height - 8);
+  ficha.style.left = x + 'px';
+  ficha.style.top = y + 'px';
+}
+
+function cerrarFicha() {
+  if (ficha.hidden) return;
+  ficha.hidden = true;
+  if (seguiaSonando) audio.play();
+  seguiaSonando = false;
+}
+document.addEventListener('mousedown', e => {
+  if (!ficha.hidden && !ficha.contains(e.target) && e.button === 0 && e.detail === 1) cerrarFicha();
+});
+
+// Saltar a un capítulo
+selCap.onchange = () => {
+  const c = capitulos[selCap.value];
+  audio.currentTime = c.inicio;
+  c.h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+// Recordar dónde se quedó (solo en este navegador)
+const CLAVE_POS = 'audiolibro-pos:' + LIBRO.titulo;
+let guardado = 0;
+audio.addEventListener('timeupdate', () => {
+  if (Math.abs(audio.currentTime - guardado) < 5) return;
+  guardado = audio.currentTime;
+  try { localStorage.setItem(CLAVE_POS, guardado); } catch {}
+});
+audio.addEventListener('loadedmetadata', () => {
+  let pos = 0;
+  try { pos = +localStorage.getItem(CLAVE_POS) || 0; } catch {}
+  if (pos > 5 && pos < LIBRO.duracion - 5) {
+    audio.currentTime = pos;
+    const n = buscar(pos);
+    if (n >= 0) palabras[n].el.scrollIntoView({ block: 'center' });
+  }
+}, { once: true });
+
+// Espacio = reproducir / pausar · Esc = cerrar la ficha
+document.addEventListener('keydown', e => {
+  if (e.code === 'Escape') cerrarFicha();
+  if (e.code === 'Space' && e.target.tagName !== 'SELECT') { e.preventDefault(); play.click(); }
+});
+</script>
+</body>
+</html>
